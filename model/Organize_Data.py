@@ -46,7 +46,7 @@ if not os.path.exists(r'C:\Users\Won Andwon\Desktop\研究内容\消息记录（
     f_reader.close()
     f_writer.close()
 
-else:
+if not os.path.exists(r'C:\Users\Won Andwon\Desktop\研究内容\消息记录（对话语料）\消息记录QA.txt'):
     f_reader = open(r'C:\Users\Won Andwon\Desktop\研究内容\消息记录（对话语料）\消息记录简版.txt', 'r', encoding='UTF-8')
     f_writer = open(r'C:\Users\Won Andwon\Desktop\研究内容\消息记录（对话语料）\消息记录QA.txt', 'w', encoding='UTF-8')
     f_writer2 = open(r'C:\Users\Won Andwon\Desktop\研究内容\消息记录（对话语料）\消息记录A.txt', 'w', encoding='UTF-8')
@@ -133,8 +133,9 @@ else:
                     else:
                         if lineA[-1] == '。' or lineA[-1] == '.':
                             lineA += line
+                        # 句间
                         else:
-                            lineA += ("。" + line)
+                            lineA += (" " + line)
 
                 QA = thisQA
                 timestamp = thistimestamp
@@ -167,8 +168,9 @@ else:
                         else:
                             if lineQ[-1] == '。' or lineQ[-1] == '.':
                                 lineQ += line
+                            # 句间隔开应注意不能出现已有词汇
                             else:
-                                lineQ += ("。" + line)
+                                lineQ += (" " + line)
                     QA = thisQA
                     timestamp = thistimestamp
                 if QA == 1:
@@ -193,3 +195,6 @@ else:
     f_writer.close()
     f_writer1.close()
     f_writer2.close()
+    print("数据预处理完毕！")
+else:
+    print("啥也没干！")
