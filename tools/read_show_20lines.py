@@ -19,6 +19,6 @@ def read_show_some_lines(filepath, mode='r', encoding='UTF-8', lines=20):
       
     file_reader.close()
     
-read_show_some_lines(r"D:\Data\对话语料\stc_weibo_train_post", lines=10)
+read_show_some_lines(r"D:\Data\UNv1.0.en-zh\en-zh\UNv1.0.en-zh.zh", lines=10)
 print()
-read_show_some_lines(r"D:\Data\对话语料\stc_weibo_train_response", lines=10)
+read_show_some_lines(r"D:\Data\UNv1.0.en-zh\en-zh\UNv1.0.en-zh.en", lines=10)
