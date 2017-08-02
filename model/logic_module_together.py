@@ -18,6 +18,7 @@ from six.moves import xrange
 import data_utils
 import data_normalize
 
+
 class CNNModel(object):
     def __init__(self,
                  session=None,
@@ -41,19 +42,17 @@ class CNNModel(object):
         self.drop_pro = drop_pro
         self.depth = depth
         self.filter_size = filter_size
-        self.filter_num=filter_num
-        self.from_train_id=from_train_id
-        self.to_train_id=to_train_id
+        self.filter_num = filter_num
+        self.from_train_id = from_train_id
+        self.to_train_id = to_train_id
         self.save_path = save_path
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
-
+        
         self.build_graph()
         if saved_model is not None and os.path.exists(
-                os.path.join(os.path.dirname(saved_model),'checkpoint')):
+                os.path.join(os.path.dirname(saved_model), 'checkpoint')):
             self.saver.restore(self.session, saved_model)
-    
-    
     
     def build_cnn_layer(self, filter_shape, input_from_last_layer):
         # print(filter_shape)
@@ -89,7 +88,7 @@ class CNNModel(object):
             tf.float32,
             [None, self.sentence_length, self.embedding_size])
         self.batch_labels = tf.placeholder(tf.float32,
-                                      [None, 1])
+                                           [None, 1])
         
         input_from_last_layer = tf.expand_dims(self.batch_sentencelen_embeddingsize_channel, -1)
         
@@ -102,7 +101,7 @@ class CNNModel(object):
                 input_from_last_layer = self.build_cnn_layer(filter_shape, input_from_last_layer)
         
         # 这个地方先写死了，记得改
-        res_flat = tf.reshape(input_from_last_layer, [-1, 16*1*128])
+        res_flat = tf.reshape(input_from_last_layer, [-1, 16 * 1 * 128])
         # print(res_flat)
         
         res_drop = tf.nn.dropout(res_flat, self.drop_pro, name="Dropout")
@@ -130,7 +129,7 @@ class CNNModel(object):
         # # print(self.loss)
         # self.train_op = tf.train.AdamOptimizer(1e-3).minimize(self.loss)
         # print(tf.trainable_variables())
-
+        
         self.fcw = tf.Variable(tf.random_normal([self.vocabulary_size, 16 * 1 * 128]), trainable=False)
         self.fcb = tf.Variable(tf.random_normal([self.vocabulary_size]), trainable=False)
         # selected = tf.constant(15, dtype=tf.int32)
@@ -180,7 +179,7 @@ class CNNModel(object):
         }
         _, loss_val = self.session.run([self.train_op, self.loss], feed_dict=feed_dict)
         return loss_val
-
+    
     def train_one(self, batch_inputs, batch_labels, selected):
         feed_dict = {
             self.batch_sentencelen_embeddingsize_channel: batch_inputs,
@@ -248,7 +247,7 @@ class CNNModel(object):
                 
                 for x in cnn_input_id:
                     cnn_input.append(id2vec_set[x])
-                    
+                
                 temp_cnn_label = np.zeros(1, dtype=np.int32)
                 if selected in cnn_label:
                     temp_cnn_label[0] = 1
@@ -279,7 +278,7 @@ def build_position_vec(sen_size, em_size):
         pos_list.append(pos_vec)
     return pos_list
 
-    
+
 def train_second_module(from_train_id, to_train_id, from_dev_id, to_dev_id, vector_path):
     from_train_id = r"D:\Data\dia\train_record_Q.txt.zh.vcb.ids40000"
     to_train_id = r"D:\Data\dia\train_record_A.txt.zh.vcb.ids40000"
@@ -318,55 +317,55 @@ def train_second_module(from_train_id, to_train_id, from_dev_id, to_dev_id, vect
                         step_time, loss = 0.0, 0.0
                     step += 1
                     
-            
-        
-        # step_time = 0.0
-        # loss = 0.0
-        # for step in xrange(50001):
-        #     start_time = time.time()
-        #     data_inputs, data_labels, selected = cnn_model.generate_batches_vector(
-        #         vec_set, data_set, 10, vocabulary_size=None, which=82)
-        #     step_loss = cnn_model.train_one(data_inputs, data_labels, selected)
-        #     step_time += (time.time() - start_time) / 200
-        #     loss += step_loss / 200
-        #     if step % 200 == 0:
-        #         print("[CNN] At %d step, the average loss is %.2f .One step time %.2f" % (step, loss, step_time))
-        #         cnn_model.saver.save(cnn_sess, saved_model, global_step=cnn_model.global_step)
-        #         step_time, loss = 0.0, 0.0
-    # with tf.Graph().as_default() as word2vec_graph:
-    #     with word2vec_graph.name_scope("Word2Vec"):
-    #         with tf.Session() as w2v_sess:
-    #             w2v_model = data_normalize.Word2VecModel(session=w2v_sess,
-    #                                   save_path='D:\Data\dia\w2v',
-    #                                   embedding_size=200,
-    #                                   dictionary=word2id,
-    #                                   reverse_dictionary=id2word,
-    #                                   vocabulary_size=vocabulary_size,
-    #                                   learning_rate=0.1,
-    #                                   window_size=2,
-    #                                   num_neg_samples=100,
-    #                                   sentence_levle=True,
-    #                                   saved_model=r'D:\Data\dia\w2v\word2vec_model.ckpt'
-    #                                   )
-    #             cnn_model = CNNModel(session=w2v_sess)
-    #             average_loss = 0
-    #             for i in xrange(10000):
-    #                 data_inputs, data_labels = cnn_model.generate_batches(w2v_model, data_set, 10)
-    #                 loss = cnn_model.train(data_inputs, data_labels)
-    #                 average_loss += loss
-    #                 if i % 200 == 0:
-    #                     if i > 0:
-    #                         average_loss /= 200
-    #                     # The average loss is an estimate of the loss over the last 2000 batches.
-    #                     print("[CNN] Average loss at step ", i, ": ", average_loss)
-    #                     # 误差 阈值 我直接设定了 可从参数设定
-    #                     if average_loss < 3:
-    #                         print("[CNN] Average loss has been low enough.")
-    #                         break
-    #                     average_loss = 0
-    #             cnn_model.saver.save(w2v_sess, r'D:\Data\dia\cnn')
-                
-        
+                    
+                    
+                    # step_time = 0.0
+                    # loss = 0.0
+                    # for step in xrange(50001):
+                    #     start_time = time.time()
+                    #     data_inputs, data_labels, selected = cnn_model.generate_batches_vector(
+                    #         vec_set, data_set, 10, vocabulary_size=None, which=82)
+                    #     step_loss = cnn_model.train_one(data_inputs, data_labels, selected)
+                    #     step_time += (time.time() - start_time) / 200
+                    #     loss += step_loss / 200
+                    #     if step % 200 == 0:
+                    #         print("[CNN] At %d step, the average loss is %.2f .One step time %.2f" % (step, loss, step_time))
+                    #         cnn_model.saver.save(cnn_sess, saved_model, global_step=cnn_model.global_step)
+                    #         step_time, loss = 0.0, 0.0
+                    # with tf.Graph().as_default() as word2vec_graph:
+                    #     with word2vec_graph.name_scope("Word2Vec"):
+                    #         with tf.Session() as w2v_sess:
+                    #             w2v_model = data_normalize.Word2VecModel(session=w2v_sess,
+                    #                                   save_path='D:\Data\dia\w2v',
+                    #                                   embedding_size=200,
+                    #                                   dictionary=word2id,
+                    #                                   reverse_dictionary=id2word,
+                    #                                   vocabulary_size=vocabulary_size,
+                    #                                   learning_rate=0.1,
+                    #                                   window_size=2,
+                    #                                   num_neg_samples=100,
+                    #                                   sentence_levle=True,
+                    #                                   saved_model=r'D:\Data\dia\w2v\word2vec_model.ckpt'
+                    #                                   )
+                    #             cnn_model = CNNModel(session=w2v_sess)
+                    #             average_loss = 0
+                    #             for i in xrange(10000):
+                    #                 data_inputs, data_labels = cnn_model.generate_batches(w2v_model, data_set, 10)
+                    #                 loss = cnn_model.train(data_inputs, data_labels)
+                    #                 average_loss += loss
+                    #                 if i % 200 == 0:
+                    #                     if i > 0:
+                    #                         average_loss /= 200
+                    #                     # The average loss is an estimate of the loss over the last 2000 batches.
+                    #                     print("[CNN] Average loss at step ", i, ": ", average_loss)
+                    #                     # 误差 阈值 我直接设定了 可从参数设定
+                    #                     if average_loss < 3:
+                    #                         print("[CNN] Average loss has been low enough.")
+                    #                         break
+                    #                     average_loss = 0
+                    #             cnn_model.saver.save(w2v_sess, r'D:\Data\dia\cnn')
+
+
 if __name__ == "__main__":
     # with tf.Session() as sess:
     #     cnn_model = CNNModel(sess)

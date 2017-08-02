@@ -7,6 +7,7 @@ from __future__ import print_function
 
 import os
 import re
+import sys
 
 from tensorflow.python.platform import gfile
 import tensorflow as tf
@@ -277,3 +278,44 @@ def read_sentences_from_many_id_files(paths):
         else:
             raise ValueError("file %s not found.", filepath)
     return sentence_list
+
+
+def read_data(source_path, target_path, max_size=None):
+    data_set = []
+    with tf.gfile.GFile(source_path, mode="r") as source_file:
+        with tf.gfile.GFile(target_path, mode="r") as target_file:
+            source, target = source_file.readline(), target_file.readline()
+            counter = 0
+            while source and target and (not max_size or counter < max_size):
+                counter += 1
+                if counter % 50000 == 0:
+                    print("  reading data line %d" % counter)
+                    sys.stdout.flush()
+                source_ids = [int(x) for x in source.split()]
+                target_ids = [int(x) for x in target.split()]
+                len_s = len(source_ids)
+                len_t = len(target_ids)
+                if 0 < len_s <= 20 and 0 < len_t <= 20:
+                    source_ids.extend([PAD_ID for _ in range(20-len_s)])
+                    data_set.append([source_ids, target_ids])
+                        
+                source, target = source_file.readline(), target_file.readline()
+    return data_set
+
+
+def read_id2vec(source_path, vocabulary_size):
+    vec_set = []
+    with tf.gfile.GFile(source_path, mode="r") as source_file:
+        source = source_file.readline()
+        counter = 0
+        while source and counter < vocabulary_size:
+            counter += 1
+            if counter % 50000 == 0:
+                print("  reading vector line %d" % counter)
+                sys.stdout.flush()
+            vec = [float(x) for x in source.split()]
+            # if len(vec) != vector_size:
+            #     print("error")
+            vec_set.append(vec)
+            source = source_file.readline()
+    return vec_set

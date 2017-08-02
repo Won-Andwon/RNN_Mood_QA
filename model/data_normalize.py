@@ -304,9 +304,21 @@ class Word2VecModel(object):
         _, loss_val = self.session.run([self.optimizer, self._loss], feed_dict=feed_dict)
         return loss_val
 
-    def get_ids_embedings(self, word):
+    def get_ids_embeddings(self, word):
         valid_examples = self.dictionary[word]
         valid_dataset = tf.constant(valid_examples, dtype=tf.int32)
+        valid_embeddings = tf.nn.embedding_lookup(
+            self.normalized_embeddings, valid_dataset)
+        return valid_embeddings.eval()
+    
+    def get_embedding(self, id):
+        valid_dataset = tf.constant(id, dtype=tf.int32)
+        valid_embeddings = tf.nn.embedding_lookup(
+            self.normalized_embeddings, valid_dataset)
+        return valid_embeddings.eval()
+    
+    def get_embeddings(self, id_list):
+        valid_dataset = tf.constant(id_list, dtype=tf.int32)
         valid_embeddings = tf.nn.embedding_lookup(
             self.normalized_embeddings, valid_dataset)
         return valid_embeddings.eval()
@@ -374,7 +386,7 @@ def word2vec_test(model_dir, test_word_list):
                                       saved_model=model_dir
                                       )
                 model.test(test_word_list)
-                print(model.get_ids_embedings('_PAD'))
+                print(model.get_ids_embeddings('宿舍'))
                 # np_embeddings = initialize_vectors(r'D:\Data\dia\vocabulary_vector40000.txt')
                 # print(np_embeddings[word2id['宿舍']])
                 # print(np_embeddings[word2id['啦']])
@@ -468,11 +480,11 @@ def train_ids_to_vectors(parameters, from_train_id, to_train_id, from_dev_id, to
                         average_loss += loss_var if loss_var is not None else 0
                         if i % (parameters.word2vec_checkpoint_interval * 10) == 0:
                             if i > 0:
-                                average_loss /= parameters.word2vec_checkpoint_interval
+                                average_loss /= (parameters.word2vec_checkpoint_interval * 10)
                             # The average loss is an estimate of the loss over the last 2000 batches.
                             print("[Word to Vector Model] Average loss at step ", i, ": ", average_loss)
-                            # 误差 阈值 我直接设定了 可从参数设定
-                            if average_loss < 10:
+                            # 误差 阈值 我直接设定了 可改程序从参数设定
+                            if average_loss < 5:
                                 print("[Word to Vector Model] Average loss has been low enough.")
                                 break
                             average_loss = 0
@@ -488,10 +500,31 @@ def train_ids_to_vectors(parameters, from_train_id, to_train_id, from_dev_id, to
                     #     for word in id2word:
                     #         word_embedding = word2vec_model.get_ids_embedings(word)
                     #         vec_file.write(str(word_embedding) + '\n')
+                    # 为了下一步 还是要按照ID顺序保存其Embedding
+                    with gfile.GFile(vec_path, mode="w") as vec_file:
+                        word_embeddings = word2vec_model.get_embeddings(
+                            [x for x in range(vocabulary_size)])
+                        for i in xrange(vocabulary_size):
+                            if i % 200 == 0:
+                                print("[Word to Vector Model] Has written %d words. " % i)
+                            word_embedding = word_embeddings[i]
+                            
+                            for _sp in word_embedding:
+                                vec_file.write(str(_sp))
+                                vec_file.write(" ")
+                            vec_file.write("\n")
     return vec_path
 
 
 if __name__ == '__main__':
     word2vec_test(r'D:\Data\dia\w2v\word2vec_model.ckpt',
                   ['宿舍', '就是', '手机', '准备', '这么', '写', '乖', '开心', '看到', '你们'])
+    file_reader = open(r"D:\Data\dia\vocabulary_vector40000.txt", mode='r', encoding="UTF-8")
+    no = 82
+    linescounter = 0
+    for line in file_reader:
+        if linescounter == no:
+            print(line.strip(' \n'))
+            print(len(line.split()))
+        linescounter += 1
 
