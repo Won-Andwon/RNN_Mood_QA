@@ -8,6 +8,7 @@ from __future__ import print_function
 import os
 import re
 import sys
+import math
 
 from tensorflow.python.platform import gfile
 import tensorflow as tf
@@ -35,7 +36,7 @@ _SPECIAL_CHAR = " \t\\,./;'\"" \
                 "abcdefghijklmnopqrstuvwxyz" \
                 "ABCDEFGHIJKLMNOPQRSTUVWXYZ" \
                 "ばれやうしヾヘてまにづらでノつゥヽすりっい｀がのかえよみんおねｯｸﾞ" \
-                "①②③④ａｄｅеｇｈнｋｎｏοＱｔＵ🇮с×а" \
+                "①②③④ａｄｅеｇｈнｋｎｏοＱｔＵ��с×а" \
                 "αｎΘ" \
                 "︺︹」└「┍┑╯╰╭╮︶‿／＼〉|∠＞〉︿─＿￣＝◡⌒" \
                 "Σ≤≥≧≦єεз←→↓≡⊂⊃∩∀⊙▽∇△∈≠›" \
@@ -93,7 +94,7 @@ def create_vocabulary(vocabulary_path, data_path_list,
                 counter = 0
                 for line in f:
                     counter += 1
-                    if counter % 10000 == 0:
+                    if counter % 100000 == 0:
                         print("已处理%s行" % counter)
                     line = tf.compat.as_text(line)
                     tokens = tokenizer(line) if tokenizer else basic_tokenizer(line, chs, char_level)
@@ -110,7 +111,7 @@ def create_vocabulary(vocabulary_path, data_path_list,
             for w in vocab_list:
                 vocabulary_file.write(w + "\n")
     else:
-        print("词汇表已存在，如果不对应请删除后再次运行。")
+        print("词汇表%s已存在，如果不对应请删除后再次运行。" % vocabulary_path)
 
 
 def initialize_vocabulary(vocabulary_path):
@@ -195,12 +196,12 @@ def prepare_data(data_dir, from_train_path, to_train_path, from_dev_path, to_dev
     vocab_path = os.path.join(data_dir, "vocabulary%d.txt" % vocabulary_size)
     create_vocabulary(vocab_path, [from_train_path, to_train_path], vocabulary_size, tokenizer,
                       chs=chs, char_level=char_level)
-    
+
     to_train_ids_path = to_train_path + postfix
     from_train_ids_path = from_train_path + postfix
     data_to_token_ids(to_train_path, to_train_ids_path, vocab_path, tokenizer, chs=chs, char_level=char_level)
     data_to_token_ids(from_train_path, from_train_ids_path, vocab_path, tokenizer, chs=chs, char_level=char_level)
-    
+
     to_dev_ids_path = to_dev_path + postfix
     from_dev_ids_path = from_dev_path + postfix
     data_to_token_ids(to_dev_path, to_dev_ids_path, vocab_path, tokenizer, chs=chs, char_level=char_level)
@@ -280,6 +281,28 @@ def read_sentences_from_many_id_files(paths):
     return sentence_list
 
 
+def read_data(source_path, target_path, max_size=None, sentence_size=32):
+    data_set = []
+    with tf.gfile.GFile(source_path, mode="r") as source_file:
+        with tf.gfile.GFile(target_path, mode="r") as target_file:
+            source, target = source_file.readline(), target_file.readline()
+            counter = 0
+            while source and target and (not max_size or counter < max_size):
+                counter += 1
+                if counter % 50000 == 0:
+                    print("  reading data line %d" % counter)
+                    sys.stdout.flush()
+                source_ids = [int(x) for x in source.split()]
+                target_ids = [int(x) for x in target.split()]
+                len_s = len(source_ids)
+                if 0 < len_s <= sentence_size:
+                    source_ids.extend([PAD_ID for _ in range(sentence_size - len_s)])
+                    data_set.append([source_ids, target_ids])
+
+                source, target = source_file.readline(), target_file.readline()
+    return data_set
+
+
 def read_data_pure(source_path, target_path, max_size=None):
     data_set = []
     with tf.gfile.GFile(source_path, mode="r") as source_file:
@@ -293,9 +316,9 @@ def read_data_pure(source_path, target_path, max_size=None):
                     sys.stdout.flush()
                 source_ids = [int(x) for x in source.split()]
                 target_ids = [int(x) for x in target.split()]
-                    
+                target_ids.append(EOS_ID)
                 data_set.append([source_ids, target_ids])
-                
+
                 source, target = source_file.readline(), target_file.readline()
     return data_set
 
@@ -322,10 +345,145 @@ def read_data_alloy(source_path, target_path, size, max_size=None):
                 if tlen >= size:
                     data_set.append(tline[:size])
                 else:
-                    data_set.append(tline + [PAD_ID * (size - tlen)])
-                
+                    data_set.append(tline + [PAD_ID] * (size - tlen))
+
                 source, target = source_file.readline(), target_file.readline()
     return data_set
+
+
+def read_data_one_file(source_path, max_size=None):
+    data_set = []
+    with tf.gfile.GFile(source_path, mode="r") as source_file:
+        source = source_file.readline()
+        counter = 0
+        while source and (not max_size or counter < max_size):
+            counter += 1
+            if counter % 50000 == 0:
+                print("  reading data line %d" % counter)
+                sys.stdout.flush()
+            source_ids = [int(x) for x in source.split()]
+            data_set.append(source_ids)
+            source = source_file.readline()
+    return data_set
+
+
+def read_id2vec(source_path, vocabulary_size):
+    vec_set = []
+    with tf.gfile.GFile(source_path, mode="r") as source_file:
+        source = source_file.readline()
+        counter = 0
+        while source and counter < vocabulary_size:
+            counter += 1
+            if counter % 50000 == 0:
+                print("  reading vector line %d" % counter)
+                sys.stdout.flush()
+            vec = [float(x) for x in source.split()]
+            # if len(vec) != vector_size:
+            #     print("error")
+            vec_set.append(vec)
+            source = source_file.readline()
+    return vec_set
+
+
+def creat_times_of_words(paths, vocab_list, target_path,
+                         tokenizer=None,
+                         chs=True, char_level=False,
+                         normalize_digits=True):
+    if not gfile.Exists(target_path):
+        print("创建词汇频度表")
+        vcb = {}
+        for path in paths:
+            with gfile.GFile(path, mode="r") as f:
+                print("处理%s文件" % path)
+                counter = 0
+                for line in f:
+                    counter += 1
+                    if counter % 10000 == 0:
+                        print("已处理%s行" % counter)
+                    line = tf.compat.as_text(line)
+                    tokens = tokenizer(line) if tokenizer else basic_tokenizer(line, chs, char_level)
+                    for token in tokens:
+                        word = _DIGIT_RE.sub(_DIG, token) if normalize_digits else token
+                        if word in vcb:
+                            vcb[word] += 1
+                        else:
+                            vcb[word] = 1
+        with gfile.GFile(target_path, mode="w") as vocabulary_file:
+            for w in vocab_list:
+                if w in vcb:
+                    vocabulary_file.write(str(vcb[w]) + "\n")
+                else:
+                    vocabulary_file.write(str(0) + "\n")
+    else:
+        print("词汇频度表已存在，如果不对应请删除后再次运行。")
+
+
+def get_vocab_frq(vocab_times_path, data_set_size):
+    if gfile.Exists(vocab_times_path):
+        times_vocab = []
+        with gfile.GFile(vocab_times_path, mode="r") as f:
+            times_vocab.extend(f.readlines())
+        times_vocab = [int(line.strip()) for line in times_vocab]
+        # idf sigmoid = 1/1+e-(ln(a/x)) = a/(x+a)
+        # only idf
+        frq_vocab = []
+        for x in times_vocab:
+            if x == 0:
+                frq_vocab.append(1.0)
+            else:
+                b = math.log((data_set_size / x))
+                if b < 1.0:
+                    frq_vocab.append(1.0)
+                else:
+                    frq_vocab.append(b)
+        return frq_vocab
+    else:
+        raise ValueError("Vocabulary times file %s not found.", vocab_times_path)
+
+
+def get_vocab_frq_with_no_truc(vocab_times_path, data_set_size):
+    if gfile.Exists(vocab_times_path):
+        times_vocab = []
+        with gfile.GFile(vocab_times_path, mode="r") as f:
+            times_vocab.extend(f.readlines())
+        times_vocab = [int(line.strip()) for line in times_vocab]
+        # idf sigmoid = 1/1+e-(ln(a/x)) = a/(x+a)
+        # only idf
+        frq_vocab = []
+        for x in times_vocab:
+            if x == 0:
+                frq_vocab.append(1.0)
+            else:
+                b = math.log((data_set_size / x))
+                frq_vocab.append(b)
+        return frq_vocab
+    else:
+        raise ValueError("Vocabulary times file %s not found.", vocab_times_path)
+
+
+def read_gene_data(gene_data_path):
+    if gfile.Exists(gene_data_path):
+        sta_set = []
+        with tf.gfile.GFile(gene_data_path, mode="r") as data_file:
+            line = data_file.readline()
+            counter = 0
+            while line:
+                counter += 1
+
+                vec = [float(x) for x in line.split()]
+                # if len(vec) != vector_size:
+                #     print("error")
+                sta_set.append(vec)
+                line = data_file.readline()
+        return sta_set
+    else:
+        raise ValueError("Vocabulary times file %s not found.", gene_data_path)
+
+
+def show_id_list_word(prefix, id2word, id_list, sp=""):
+    for id in id_list:
+        prefix = "%s%s%s" % (prefix, sp, id2word[id])
+    print(prefix)
 
 
 def read_data_divide(source_path, target_path, size, max_size=None):
@@ -342,24 +500,25 @@ def read_data_divide(source_path, target_path, size, max_size=None):
                 source_ids = [int(x) for x in source.split()]
                 target_ids = [int(x) for x in target.split()]
                 if len(source_ids) < 4 or len(target_ids) < 3:
+                    source, target = source_file.readline(), target_file.readline()
                     continue
                 if len(source_ids) > size:
                     source_ids = source_ids[0:size]
                 else:
                     pad_size = size - len(source_ids)
                     source_ids += [PAD_ID] * pad_size
-                target_ids = [GO_ID] + target_ids
-                if len(source_ids) > size:
+                target_ids = [GO_ID] + target_ids + [EOS_ID]
+                if len(target_ids) > size:
                     target_ids = target_ids[0:size]
                 else:
-                    pad_size = size - len(source_ids)
+                    pad_size = size - len(target_ids)
                     target_ids += [PAD_ID] * pad_size
                 data_set.append((source_ids, target_ids))
                 # if tlen >= size:
                 #     data_set.append(tline[:size])
                 # else:
                 #     data_set.append(tline + [PAD_ID * (size - tlen)])
-                
+
                 source, target = source_file.readline(), target_file.readline()
     return data_set
 
@@ -384,57 +543,24 @@ def read_mask_data(source_path, max_size=None):
     return data_set
 
 
-def read_data_one_file(source_path, max_size=None):
-    data_set = []
-    with tf.gfile.GFile(source_path, mode="r") as source_file:
-        source = source_file.readline()
-        counter = 0
-        while source and (not max_size or counter < max_size):
-            counter += 1
-            if counter % 50000 == 0:
-                print("  reading data line %d" % counter)
-                sys.stdout.flush()
-            source_ids = [int(x) for x in source.split()]
-            data_set.append(source_ids)
-            source = source_file.readline()
-    return data_set
-
-
-def read_data(source_path, target_path, max_size=None, sentence_size=32):
-    data_set = []
-    with tf.gfile.GFile(source_path, mode="r") as source_file:
-        with tf.gfile.GFile(target_path, mode="r") as target_file:
-            source, target = source_file.readline(), target_file.readline()
-            counter = 0
-            while source and target and (not max_size or counter < max_size):
-                counter += 1
-                if counter % 50000 == 0:
-                    print("  reading data line %d" % counter)
-                    sys.stdout.flush()
-                source_ids = [int(x) for x in source.split()]
-                target_ids = [int(x) for x in target.split()]
-                len_s = len(source_ids)
-                if 0 < len_s <= sentence_size:
-                    source_ids.extend([PAD_ID for _ in range(sentence_size - len_s)])
-                    data_set.append([source_ids, target_ids])
-
-                source, target = source_file.readline(), target_file.readline()
-    return data_set
-
-
-def read_id2vec(source_path, vocabulary_size):
-    vec_set = []
-    with tf.gfile.GFile(source_path, mode="r") as source_file:
-        source = source_file.readline()
-        counter = 0
-        while source and counter < vocabulary_size:
-            counter += 1
-            if counter % 50000 == 0:
-                print("  reading vector line %d" % counter)
-                sys.stdout.flush()
-            vec = [float(x) for x in source.split()]
-            # if len(vec) != vector_size:
-            #     print("error")
-            vec_set.append(vec)
-            source = source_file.readline()
-    return vec_set
+def get_vocab_frq_mask(vocab_times_path, data_set_size):
+    if gfile.Exists(vocab_times_path):
+        times_vocab = []
+        with gfile.GFile(vocab_times_path, mode="r") as f:
+            times_vocab.extend(f.readlines())
+        times_vocab = [int(line.strip()) for line in times_vocab]
+        # idf sigmoid = 1/1+e-(ln(a/x)) = a/(x+a)
+        # only idf
+        frq_vocab = []
+        for x in times_vocab:
+            if x == 0 or x > (data_set_size / 7):
+                frq_vocab.append(0.0)
+            else:
+                b = math.log((data_set_size / x))
+                if b < 1.0:
+                    frq_vocab.append(1.0)
+                else:
+                    frq_vocab.append(b)
+        return frq_vocab
+    else:
+        raise ValueError("Vocabulary times file %s not found.", vocab_times_path)

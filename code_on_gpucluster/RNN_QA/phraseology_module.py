@@ -23,23 +23,23 @@ only one bucket (30 50)
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-
-import random
-import os
-import sys
-import time
+import data_utils
+import logic_module_together
 import math
-
 import numpy as np
-from six.moves import xrange  # pylint: disable=redefined-builtin
+import os
+import random
+import sys
 import tensorflow as tf
+import time
+from six.moves import xrange  # pylint: disable=redefined-builtin
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import embedding_ops
 from tensorflow.python.ops import math_ops
 from tensorflow.python.ops import nn_ops
 
-import data_utils
+
 
 
 class Seq2SeqModel(object):
@@ -60,7 +60,7 @@ class Seq2SeqModel(object):
         self.save_path = save_path
         if self.save_path is not None and not os.path.exists(self.save_path):
             os.makedirs(self.save_path)
-        
+
         self.vocab_size = vocab_size
         self.buckets = buckets
         self.batch_size = batch_size
@@ -76,29 +76,29 @@ class Seq2SeqModel(object):
         self.sentence_length = sentence_length
         self.build_graph()
 
-    # def sampled_softmax_loss(self,
-    #                          weights,
-    #                          biases,
-    #                          labels,
-    #                          inputs,
-    #                          batch_sample_word_id_list,
-    #                          num_sampled,
-    #                          num_classes,
-    #                          num_true=1,
-    #                          sampled_values=None,
-    #                          remove_accidental_hits=True,
-    #                          partition_strategy="mod",
-    #                          name="my_sampled_softmax_loss"):
-    #     with ops.name_scope(name, values=[weights, biases, inputs, labels]):
-    #         for each in xrange(labels.shape[0]):
-    #             one_label = labels[each]
-    #             one_input = inputs[each]
-    #             one_sample_word_id_list = batch_sample_word_id_list[each]
-    #             if one_label in one_sample_word_id_list:
-    #
-    #
-    #     return 0.0
-        
+        # def sampled_softmax_loss(self,
+        #                          weights,
+        #                          biases,
+        #                          labels,
+        #                          inputs,
+        #                          batch_sample_word_id_list,
+        #                          num_sampled,
+        #                          num_classes,
+        #                          num_true=1,
+        #                          sampled_values=None,
+        #                          remove_accidental_hits=True,
+        #                          partition_strategy="mod",
+        #                          name="my_sampled_softmax_loss"):
+        #     with ops.name_scope(name, values=[weights, biases, inputs, labels]):
+        #         for each in xrange(labels.shape[0]):
+        #             one_label = labels[each]
+        #             one_input = inputs[each]
+        #             one_sample_word_id_list = batch_sample_word_id_list[each]
+        #             if one_label in one_sample_word_id_list:
+        #
+        #
+        #     return 0.0
+
         # if not isinstance(weights, list):
         #     weights = [weights]
         #
@@ -205,11 +205,12 @@ class Seq2SeqModel(object):
         #         array_ops.ones_like(true_logits) / num_true,
         #         array_ops.zeros_like(sampled_logits)
         #     ], 1)
-        
+
         # sampled_losses = nn_ops.softmax_cross_entropy_with_logits(labels=out_labels,
         #                                                           logits=out_logits)
         # # sampled_losses is a [batch_size] tensor.
         # return sampled_losses
+
     def sequence_loss_by_single(self, stc_logits, stc_targets,
                                 stc_weights, batch_sample_word_id,
                                 name=None):
@@ -248,7 +249,7 @@ class Seq2SeqModel(object):
                     self.full_connect_w, word_ids, partition_strategy="mod")
                 all_b = embedding_ops.embedding_lookup(
                     self.full_connect_b, word_ids)
-                
+
                 # print(ex_logit.shape)
                 # print(all_w.shape)
                 # print(all_b.shape)
@@ -264,7 +265,7 @@ class Seq2SeqModel(object):
                 crossent = nn_ops.softmax_cross_entropy_with_logits(
                     labels=labels, logits=logits)
                 log_perp_list.append(crossent * weight)
-            
+
             log_perps = math_ops.add_n(log_perp_list)
             # print(log_perps)
             total_size = math_ops.add_n(stc_weights)
@@ -272,7 +273,7 @@ class Seq2SeqModel(object):
             log_perps /= total_size
             # print(log_perps)
         return log_perps
-            
+
     def sequence_loss(self, stc_logits, stc_targets,
                       stc_weights, batch_sample_word_id,
                       name=None):
@@ -285,22 +286,22 @@ class Seq2SeqModel(object):
                                              batch_sample_word_id=batch_sample_word_id))
             batch_size = array_ops.shape(stc_targets[0])[0]
             return cost / math_ops.cast(batch_size, cost.dtype)
-    
+
     def build_graph(self):
         self.learning_rate_decay_op = self.learning_rate.assign(
             self.learning_rate * self.learning_rate_decay_factor)
-        
+
         if self.num_layers > 1:
             cell = tf.contrib.rnn.MultiRNNCell(
                 [tf.contrib.rnn.GRUCell(self.neo_size) for _ in range(self.num_layers)])
         else:
             cell = tf.contrib.rnn.GRUCell(self.neo_size)
-        
+
         self.full_connect_w = tf.get_variable("out_w", [self.vocab_size, self.neo_size], dtype=tf.float32)
         transpose_full_connect_w = tf.transpose(self.full_connect_w)
         self.full_connect_b = tf.get_variable("out_b", [self.vocab_size], dtype=tf.float32)
         output_projection = (transpose_full_connect_w, self.full_connect_b)
-        
+
         # def sampled_loss(labels, logits):
         #     labels = tf.reshape(labels, [-1, 1])
         #     # tf.nn.sampled_softmax_loss()
@@ -314,13 +315,13 @@ class Seq2SeqModel(object):
         #         num_classes=self.vocab_size)
         #
         # softmax_loss_function = sampled_loss
-        
+
         # Feeds for inputs.
         self.encoder_inputs = []
         self.decoder_inputs = []
         self.target_weights = []
         self.part_vocab_inputs = []
-            
+
         for i in xrange(self.sentence_length):
             self.encoder_inputs.append(
                 tf.placeholder(tf.int32, shape=[None], name="encoder{0}".format(i)))
@@ -332,11 +333,10 @@ class Seq2SeqModel(object):
             self.part_vocab_inputs.append(
                 tf.placeholder(shape=[None, self.num_samples + self.num_samples_word - 1],
                                dtype=tf.int32, name="part_vocab{0}".format(i)))
-        
+
         # Our targets are decoder inputs shifted by one.
         targets = [self.decoder_inputs[i + 1] for i in xrange(len(self.decoder_inputs) - 1)]
-        
-        
+
         # Training outputs and losses.
         if self.forward_only:
             self.outputs, _ = tf.contrib.legacy_seq2seq.embedding_attention_seq2seq(
@@ -347,14 +347,14 @@ class Seq2SeqModel(object):
                 num_decoder_symbols=self.vocab_size,
                 embedding_size=self.neo_size,
                 output_projection=output_projection,
-                feed_previous=True,
+                feed_previous=False,
                 dtype=tf.float32)
             self.losses = self.sequence_loss(
                 stc_logits=self.outputs,
                 stc_targets=targets[:self.sentence_length],
                 stc_weights=self.target_weights[:self.sentence_length],
                 batch_sample_word_id=self.part_vocab_inputs[:self.sentence_length])
-            
+
             if output_projection is not None:
                 self.outputs = [tf.matmul(output, output_projection[0]) + output_projection[1]
                                 for output in self.outputs]
@@ -370,27 +370,27 @@ class Seq2SeqModel(object):
                 feed_previous=False,
                 dtype=tf.float32)
             # 句子长度 个 output组成 outputs 其中 每个output是一个 [batch, 神经元个数]
-            
+
             self.losses = self.sequence_loss(
                 stc_logits=self.outputs,
                 stc_targets=targets[:self.sentence_length],
                 stc_weights=self.target_weights[:self.sentence_length],
                 batch_sample_word_id=self.part_vocab_inputs[:self.sentence_length])
-        
+
         params = tf.trainable_variables()
         if not self.forward_only:
             opt = tf.train.GradientDescentOptimizer(self.learning_rate)
-            
+
             gradients = tf.gradients(self.losses, params)
             clipped_gradients, norm = tf.clip_by_global_norm(gradients, self.max_gradient_norm)
             self.gradient_norms = norm
             self.updates = opt.apply_gradients(zip(clipped_gradients, params), global_step=self.global_step)
-        
+
         self.saver = tf.train.Saver(tf.global_variables())
-    
+
     def step(self, session, encoder_inputs, decoder_inputs, target_weights, batch_word_ids, forward_only):
         encoder_size, decoder_size = self.sentence_length, self.sentence_length
-        
+
         input_feed = {}
         for l in xrange(encoder_size):
             input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
@@ -398,10 +398,10 @@ class Seq2SeqModel(object):
             input_feed[self.decoder_inputs[l].name] = decoder_inputs[l]
             input_feed[self.target_weights[l].name] = target_weights[l]
             input_feed[self.part_vocab_inputs[l].name] = batch_word_ids[l]
-        
+
         last_target = self.decoder_inputs[decoder_size].name
         input_feed[last_target] = np.zeros([self.batch_size], dtype=np.int32)
-        
+
         # Output feed: depends on whether we do a backward step or not.
         if not forward_only:
             output_feed = [self.updates,  # Update Op that does SGD.
@@ -411,84 +411,96 @@ class Seq2SeqModel(object):
             output_feed = [self.losses]  # Loss for this batch.
             for l in xrange(decoder_size):  # Output logits.
                 output_feed.append(self.outputs[l])
-        
+
         outputs = session.run(output_feed, input_feed)
         if not forward_only:
             return outputs[1], outputs[2], None  # Gradient norm, loss, no outputs.
         else:
             return None, outputs[0], outputs[1:]  # No gradient norm, loss, outputs.
-    
-    def get_batch(self, data, word_data):
+
+    def get_batch(self, data, word_data, only_one=False):
+        strict = -1 if only_one else 0
         data_size = len(data)
         another_size = len(word_data)
         if data_size != another_size:
             raise ValueError("读取的文件行数不一致。")
-        
-        encoder_size, decoder_size = self.sentence_length
+
+        encoder_size, decoder_size = self.sentence_length, self.sentence_length
         encoder_inputs, decoder_inputs = [], []
         sample_word_inputs = []
-        
+
         for _ in xrange(self.batch_size):
-            line_no = random.randint(0, data_size)
-            encoder_input, decoder_input = data[line_no]
-            while len(encoder_input) == 0 \
-                    or len(encoder_input) > encoder_size \
-                    or len(decoder_input) == 0 \
-                    or len(decoder_input) > (decoder_size-1):
-                line_no = random.randint(0, data_size)
+            try:
+                line_no = random.randint(0, data_size - 1)
                 encoder_input, decoder_input = data[line_no]
-            sample_word_input = word_data[line_no]
+                # print(len(encoder_input), len(decoder_input))
+                while len(encoder_input) == 0 \
+                        or len(encoder_input) > encoder_size \
+                        or len(decoder_input) == strict \
+                        or len(decoder_input) > (decoder_size - 1):
+                    line_no = random.randint(0, data_size - 1)
+                    encoder_input, decoder_input = data[line_no]
+                sample_word_input = word_data[line_no]
+            except IndexError:
+                print("data's length is %d, but index is %d! Original length is %d"
+                      % (len(data), line_no, data_size))
+                raise IndexError
             if len(sample_word_input) != self.num_samples_word:
                 print("有个句子给的推荐不符合长度。")
             # Encoder inputs are padded and then reversed.
             encoder_pad = [data_utils.PAD_ID] * (encoder_size - len(encoder_input))
             encoder_inputs.append(list(reversed(encoder_input + encoder_pad)))
-            
+
             # Decoder inputs get an extra "GO" symbol, and are padded then.
             decoder_pad_size = decoder_size - len(decoder_input) - 1
             decoder_inputs.append([data_utils.GO_ID] + decoder_input +
                                   [data_utils.PAD_ID] * decoder_pad_size)
-        
+
             # Sample words list input will be changed for longer
             t_w_list = random.sample(range(self.vocab_size), self.num_samples_word + self.num_samples)
             for w in sample_word_input:
                 if w in t_w_list:
                     t_w_list.remove(w)
             t_w_list = t_w_list[:self.num_samples]
+
             sample_word_inputs.append(sample_word_input + t_w_list)
-            
+
         # Now we create batch-major vectors from the data selected above.
         batch_encoder_inputs, batch_decoder_inputs, batch_weights = [], [], []
         batch_word_list = []
-        
+
         # Batch encoder inputs are just re-indexed encoder_inputs.
         for length_idx in xrange(encoder_size):
             batch_encoder_inputs.append(
                 np.array([encoder_inputs[batch_idx][length_idx]
                           for batch_idx in xrange(self.batch_size)], dtype=np.int32))
-        
+
         # Batch decoder inputs are re-indexed decoder_inputs, we create weights.
         for length_idx in xrange(decoder_size):
             batch_decoder_inputs.append(
                 np.array([decoder_inputs[batch_idx][length_idx]
                           for batch_idx in xrange(self.batch_size)], dtype=np.int32))
+
             sample_word_list = []
             for batch_idx in xrange(self.batch_size):
+                # print(batch_idx, len(sample_word_inputs[batch_idx]))
+                temp_sample_word_inputs = sample_word_inputs[batch_idx][:]
                 if length_idx < (decoder_size - 1):
-                    key_word = decoder_inputs[batch_idx][length_idx + 1]
+                    key_word = temp_sample_word_inputs[length_idx + 1]
                     if key_word in sample_word_inputs[batch_idx]:
-                        sample_word_inputs[batch_idx].remove(key_word)
+                        temp_sample_word_inputs.remove(key_word)
                     else:
-                        sample_word_inputs[batch_idx] = \
-                            sample_word_inputs[batch_idx][:(self.num_samples+self.num_samples_word-1)]
+                        temp_sample_word_inputs = \
+                            temp_sample_word_inputs[:(self.num_samples + self.num_samples_word - 1)]
                 else:
-                    sample_word_inputs[batch_idx] = \
-                        sample_word_inputs[batch_idx][:(self.num_samples + self.num_samples_word - 1)]
-                if len(sample_word_inputs[batch_idx]) != self.num_samples + self.num_samples_word - 1:
-                    raise ValueError("截取候选词汇出了问题。")
-                sample_word_list.append(sample_word_inputs[batch_idx])
+                    temp_sample_word_inputs = \
+                        temp_sample_word_inputs[:(self.num_samples + self.num_samples_word - 1)]
+                if len(temp_sample_word_inputs) != self.num_samples + self.num_samples_word - 1:
+                    raise ValueError("截取候选词汇出了问题。%d and %d." % (
+                        len(temp_sample_word_inputs), self.num_samples + self.num_samples_word - 1))
+                sample_word_list.append(temp_sample_word_inputs)
             batch_word_list.append(np.array(sample_word_list, dtype=np.int32))
-            
+
             # Create target_weights to be 0 for targets that are padding.
             batch_weight = np.ones(self.batch_size, dtype=np.float32)
             for batch_idx in xrange(self.batch_size):
@@ -500,6 +512,63 @@ class Seq2SeqModel(object):
                     batch_weight[batch_idx] = 0.0
             batch_weights.append(batch_weight)
         return batch_encoder_inputs, batch_decoder_inputs, batch_weights, batch_word_list
+
+    def next_generator(self, sess, sentence_ids, answer_ids, sample_word_list):
+        encoder_inputs, decoder_inputs, target_weights, word_sample = self.get_batch(
+            [(sentence_ids, answer_ids)], [sample_word_list], only_one=True)
+        _, _, output_logits = self.step(sess, encoder_inputs, decoder_inputs,
+                                        target_weights, word_sample, True)
+        return output_logits[len(answer_ids)][0]
+
+    def generator(self, sess, sentence, word2id, sample_word_list, select="ALL", answer_ids=None, mask_list=None):
+        token_ids = data_utils.sentence_to_token_ids(tf.compat.as_text(sentence), word2id)
+        if answer_ids is None:
+            encoder_inputs, decoder_inputs, target_weights, word_sample = self.get_batch(
+                [(token_ids, [])], [sample_word_list], only_one=True)
+        else:
+            encoder_inputs, decoder_inputs, target_weights, word_sample = self.get_batch(
+                [(token_ids, answer_ids)], [sample_word_list], only_one=True)
+
+        _, _, output_logits = self.step(sess, encoder_inputs, decoder_inputs,
+                                        target_weights, word_sample, True)
+        if select == "ALL":
+            outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
+            outputs = []
+            if mask_list is None:
+                for logit in output_logits:
+                    logit = logit[0]
+                    outputs.append((-logit).argsort()[0:30])
+            else:
+                for i in xrange(len(output_logits)):
+                    logit = output_logits[i][0]
+                    mask = np.zeros([40000], dtype=np.float32)
+                    for each in mask_list[i]:
+                        mask[each[0]] = 1
+                    logit = np.multiply(logit, mask)
+                    # mask_id = []
+                    # for each in mask:
+                    #     mask_id.append(each[0])
+                    # for i in xrange(len(logit)):
+                    #     if i not in mask_id:
+                    #         logit[i] = 0
+                    outputs.append((-logit).argsort()[0:30])
+
+        elif select == "SAMPLE":
+            outputs = []
+            for logit in output_logits:
+                logit = logit[0]
+                new_logit = []
+
+                first = (-logit).argsort()[0:5000]
+                selected = []
+                for i in first:
+                    if i in sample_word_list:
+                        selected.append(i)
+                outputs.append(selected)
+                # print(logit)
+        else:
+            raise ValueError(print("ALL or SAMPLE."))
+        return outputs
 
 
 def train_third_module(from_train_id, to_train_id, word_sample_path, vocab_path, para=None):
@@ -518,6 +587,7 @@ def train_third_module(from_train_id, to_train_id, word_sample_path, vocab_path,
         to_train_id = to_train_id
         word_sample_path = word_sample_path
         data_set = data_utils.read_data(from_train_id, to_train_id, sentence_size=para.cnn_sentence_size)
+        data_word = data_utils.read_data_one_file(word_sample_path)
         word2id, id2word = data_utils.initialize_vocabulary(vocab_path)
         vocabulary_size = min(len(id2word), para.vocabulary_size)
         seq2seq_dir = os.path.join(para.data_dir, "seq2seq")
@@ -531,10 +601,10 @@ def train_third_module(from_train_id, to_train_id, word_sample_path, vocab_path,
         else:
             print("Created model with fresh parameters.")
             sess.run(tf.global_variables_initializer())
-        
+
         # Read data into buckets and compute their sizes.
         print("Reading data and get into training.")
-        
+
         # This is the training loop.
         step_time, loss = 0.0, 0.0
         current_step = 0
@@ -544,19 +614,19 @@ def train_third_module(from_train_id, to_train_id, word_sample_path, vocab_path,
             encoder_inputs, decoder_inputs, target_weights, word_sample = model.get_batch(data_set, data_word)
             _, step_loss, _ = model.step(sess, encoder_inputs, decoder_inputs,
                                          target_weights, word_sample, False)
-            step_time += (time.time() - start_time) / 200
-            loss += step_loss / 200
+            step_time += (time.time() - start_time) / 20
+            loss += step_loss / 20
             current_step += 1
-            if current_step % 200 == 0:
+            if current_step % 20 == 0:
                 perplexity = math.exp(float(loss)) if loss < 300 else float("inf")
-                print("[Seq2Seq model] global step %d learning rate %.4f step-time %.2f perplexity "
+                print("[Seq2Seq model] global step %d learning rate %.6f step-time %.6f perplexity "
                       "%.2f" % (model.global_step.eval(), model.learning_rate.eval(), step_time, perplexity))
                 # Decrease learning rate if no improvement was seen over last 3 times.
                 if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
                     sess.run(model.learning_rate_decay_op)
                 previous_losses.append(loss)
                 # Save checkpoint and zero timer and loss.
-                model.saver.save(sess, saved_model, global_step=model.global_step)
+                # model.saver.save(sess, saved_model, global_step=model.global_step)
                 step_time, loss = 0.0, 0.0
                 # Run evals on development set and print their perplexity.
                 # for bucket_id in xrange(len(_buckets)):
@@ -574,58 +644,112 @@ def train_third_module(from_train_id, to_train_id, word_sample_path, vocab_path,
 
 
 if __name__ == "__main__":
-    Seq2SeqModel()
-    # seq2seq_path = os.path.join(r'D:\Data\dia', "seq2seq")
-    # saved_model = os.path.join()
-    # with tf.Session() as sess:
-    #     model = Seq2SeqModel(
-    #         forward_only=True)
-    #     ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
-    #     if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
-    #         print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
-    #         model.saver.restore(session, ckpt.model_checkpoint_path)
-    #     else:
-    #         print("Created model with fresh parameters.")
-    #         session.run(tf.global_variables_initializer())
-    #     model.batch_size = 1  # We decode one sentence at a time.
-    #
-    #     # Load vocabularies.
-    #     en_vocab_path = os.path.join(FLAGS.data_dir,
-    #                                  "vocab%d.from" % FLAGS.from_vocab_size)
-    #     fr_vocab_path = os.path.join(FLAGS.data_dir,
-    #                                  "vocab%d.to" % FLAGS.to_vocab_size)
-    #     en_vocab, _ = data_utils.initialize_vocabulary(en_vocab_path)
-    #     _, rev_fr_vocab = data_utils.initialize_vocabulary(fr_vocab_path)
-    #
-    #     # Decode from standard input.
-    #     sys.stdout.write("> ")
-    #     sys.stdout.flush()
-    #     sentence = sys.stdin.readline()
-    #     while sentence:
-    #         # Get token-ids for the input sentence.
-    #         token_ids = data_utils.sentence_to_token_ids(tf.compat.as_text(sentence), en_vocab)
-    #         # Which bucket does it belong to?
-    #         bucket_id = len(_buckets) - 1
-    #         for i, bucket in enumerate(_buckets):
-    #             if bucket[0] >= len(token_ids):
-    #                 bucket_id = i
-    #                 break
-    #         else:
-    #             logging.warning("Sentence truncated: %s", sentence)
-    #
-    #         # Get a 1-element batch to feed the sentence to the model.
-    #         encoder_inputs, decoder_inputs, target_weights = model.get_batch(
-    #             {bucket_id: [(token_ids, [])]}, bucket_id)
-    #         # Get output logits for the sentence.
-    #         _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs,
-    #                                          target_weights, bucket_id, True)
-    #         # This is a greedy decoder - outputs are just argmaxes of output_logits.
-    #         outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
-    #         # If there is an EOS symbol in outputs, cut them at that point.
-    #         if data_utils.EOS_ID in outputs:
-    #             outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-    #         # Print out French sentence corresponding to outputs.
-    #         print(" ".join([tf.compat.as_str(rev_fr_vocab[output]) for output in outputs]))
-    #         print("> ", end="")
-    #         sys.stdout.flush()
-    #         sentence = sys.stdin.readline()
+    # Seq2SeqModel()
+    train_third_module(None, None, None, None, None)
+
+    # from_train_id = r"/home/chenyongchang/data/dia/train_record_Q.txt.zh.vcb.ids40000"
+    # to_train_id = r"/home/chenyongchang/data/dia/train_record_A.txt.zh.vcb.ids40000"
+    vector_path = r"/home/chenyongchang/data/dia/vocabulary_vector40000.txt"
+    # word_sample_path = r"/home/chenyongchang/data/dia/train_middle_Q.txt"
+    # data_set = data_utils.read_data_pure(from_train_id, to_train_id)
+    # data_word = data_utils.read_data_one_file(word_sample_path)
+    word2id, id2word = data_utils.initialize_vocabulary(r'/home/chenyongchang/data/dia/vocabulary40000.txt')
+    vocabulary_size = min(len(id2word), 40000)
+    cnn_vocabulary_size = len(id2word)
+    id2frq = data_utils.get_vocab_frq(r"/home/chenyongchang/data/dia/vocabulary40000_frequency.txt",
+                                      88256)
+    vec_set = data_utils.read_id2vec(vector_path, vocabulary_size)
+    pos_vec_list = logic_module_together.build_position_vec(32, 200)
+    cnn_dir = os.path.join(r'/home/chenyongchang/data/dia/', "bucket_cnn_tgth")
+    statistics_path = os.path.join(cnn_dir, "label_material")
+    cnn_saved_model = os.path.join(cnn_dir, "cnn_tgth_model.ckpt")
+    seq2seq_dir = os.path.join(r'/home/chenyongchang/data/dia/', "seq2seq")
+    saved_model = os.path.join(seq2seq_dir, "seq2seq_model.ckpt")
+    id_mask_path = r"/home/chenyongchang/data/dia/bin_group.txt"
+    id_mask = data_utils.read_mask_data(id_mask_path)
+    sentence_list = [
+        # "说那么多连一开始分享的快乐都没有了",
+        # "我嗓子疼，随便吃点流食",
+        "那我先去睡咯",
+        # "聊的才开心呢",
+        # "就陪父母看电视聊电视,然后散步走走,看景色",
+        # "我觉得很一般",
+        # "我们已经是好友啦，一起来聊天吧！",
+        # "果然我们的想法都不一样感受也不容易理解",
+        # "说那么多连一开始分享的快乐都没有了",
+        # "刚买了一点点小零食 回来准备比赛"
+    ]
+    sample_list = []
+    with tf.Session() as cnn_sess:
+        cnn_model = logic_module_together.CNNModel(
+            session=cnn_sess,
+            vocabulary_size=cnn_vocabulary_size,
+            save_path=cnn_dir,
+            id2frq=id2frq,
+            saved_model=r'/home/chenyongchang/data/dia/bucket_cnn_tgth/cnn_tgth_model.ckpt-200001')
+        if os.path.exists(statistics_path):
+            gene_data = data_utils.read_gene_data(statistics_path)
+            cnn_model.statistic_words(gene_data=gene_data)
+        for sentence in sentence_list:
+            id_list = cnn_model.generator(
+                sentence, word2id=word2id, id2word=id2word, id2vec_set=vec_set, pos=pos_vec_list)
+            sample_list.append(list(id_list))
+
+    with tf.Graph().as_default():
+        with tf.Session() as seq2seq_sess:
+            seq2seq_model = Seq2SeqModel(vocab_size=40000, save_path=seq2seq_dir, batch_size=1,
+                                         forward_only=True)
+            ckpt = tf.train.get_checkpoint_state(seq2seq_dir)
+            if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
+                print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
+                seq2seq_model.saver.restore(seq2seq_sess, ckpt.model_checkpoint_path)
+            else:
+                print("Created model with fresh parameters.")
+                seq2seq_sess.run(tf.global_variables_initializer())
+
+            # sys.stdout.write("> ")
+            # sys.stdout.flush()
+            for i in xrange(len(sentence_list)):
+                answer_ids = [word2id["抱抱"], word2id["午安"], word2id["宝贝儿"]]
+                #
+                # mask_list = [id_mask[data_utils.GO_ID]]
+                # for ids in answer_ids:
+                #     mask_list.append(id_mask[ids])
+                # len_mask = len(mask_list)
+                # if len_mask < seq2seq_model.sentence_length:
+                #     mask_list.extend([id_mask[data_utils.GO_ID]] * (seq2seq_model.sentence_length - len_mask))
+
+                res_id_list = seq2seq_model.generator(
+                    seq2seq_sess, sentence_list[i], word2id, sample_list[i],
+                    select="SAMPLE", answer_ids=answer_ids, mask_list=None)
+                for each in res_id_list:
+                    print(("Answer to %s : " % sentence_list[i]) + " ".join(
+                        [tf.compat.as_str(id2word[output]) for output in each]))
+                    #     while sentence:
+                    #         # Get token-ids for the input sentence.
+                    #         token_ids = data_utils.sentence_to_token_ids(tf.compat.as_text(sentence), en_vocab)
+                    #         # Which bucket does it belong to?
+                    #         bucket_id = len(_buckets) - 1
+                    #         for i, bucket in enumerate(_buckets):
+                    #             if bucket[0] >= len(token_ids):
+                    #                 bucket_id = i
+                    #                 break
+                    #         else:
+                    #             logging.warning("Sentence truncated: %s", sentence)
+                    #
+                    #         # Get a 1-element batch to feed the sentence to the model.
+                    #         encoder_inputs, decoder_inputs, target_weights = model.get_batch(
+                    #             {bucket_id: [(token_ids, [])]}, bucket_id)
+                    #         # Get output logits for the sentence.
+                    #         _, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs,
+                    #                                          target_weights, bucket_id, True)
+                    #         # This is a greedy decoder - outputs are just argmaxes of output_logits.
+                    #         outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
+                    #         # If there is an EOS symbol in outputs, cut them at that point.
+                    #         if data_utils.EOS_ID in outputs:
+                    #             outputs = outputs[:outputs.index(data_utils.EOS_ID)]
+                    #         # Print out French sentence corresponding to outputs.
+                    #         print(" ".join([tf.compat.as_str(rev_fr_vocab[output]) for output in outputs]))
+                    #         print("> ", end="")
+                    #         sys.stdout.flush()
+                    #         sentence = sys.stdin.readline()
